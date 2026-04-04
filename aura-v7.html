@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AURA v7 — Now Playing</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;1,400&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#000;overflow:hidden;font-family:'DM Sans',sans-serif;width:100vw;height:100vh;}
+canvas{display:block;width:100%;height:100%;cursor:default;}
+canvas.hovering{cursor:pointer;}
+#ui{position:fixed;inset:0;pointer-events:none;}
+.app-name{position:fixed;top:22px;left:28px;font-family:'Playfair Display',serif;font-size:22px;font-style:italic;color:rgba(255,255,255,.85);letter-spacing:.04em;}
+.mood-tag{position:fixed;top:22px;right:28px;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.35);padding:5px 12px;border-radius:20px;border:.5px solid rgba(255,255,255,.1);transition:color 2s,border-color 2s;}
+.pills{position:fixed;top:64px;left:28px;display:flex;flex-direction:column;gap:7px;pointer-events:all;}
+.pill{font-size:11px;letter-spacing:.04em;padding:5px 13px;border-radius:20px;border:.5px solid rgba(255,255,255,.12);color:rgba(255,255,255,.32);cursor:pointer;background:rgba(0,0,0,.3);transition:all .3s;user-select:none;backdrop-filter:blur(6px);}
+.pill:hover{color:rgba(255,255,255,.75);border-color:rgba(255,255,255,.3);}
+.pill.active{color:#fff;background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.45);}
+.hint{position:fixed;top:22px;left:50%;transform:translateX(-50%);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.18);pointer-events:none;transition:opacity .4s;white-space:nowrap;}
+.right-panel{position:fixed;bottom:160px;right:28px;display:flex;flex-direction:column;gap:6px;pointer-events:all;}
+.panel-label{font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.18);text-align:center;margin-bottom:2px;}
+.panel-divider{height:.5px;background:rgba(255,255,255,.08);margin:4px 0;}
+.icon-btn{width:36px;height:36px;border-radius:50%;border:.5px solid rgba(255,255,255,.15);background:rgba(0,0,0,.4);color:rgba(255,255,255,.45);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .25s;font-size:14px;backdrop-filter:blur(6px);line-height:1;}
+.icon-btn:hover{color:#fff;border-color:rgba(255,255,255,.4);}
+.icon-btn.active{color:#fff;background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.5);}
+.icon-btn.tod-active{color:#ffdd88;border-color:#ffdd8855;background:rgba(255,220,100,.08);}
+.now-badge{position:fixed;bottom:145px;left:28px;display:flex;align-items:center;gap:7px;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.28);}
+.pulse-dot{width:6px;height:6px;border-radius:50%;background:#1DB954;box-shadow:0 0 8px #1DB954;animation:blink 2s ease-in-out infinite;}
+@keyframes blink{0%,100%{opacity:1;}50%{opacity:.2;}}
+.spotify-btn{position:fixed;top:62px;right:28px;display:flex;align-items:center;gap:8px;padding:7px 13px;border-radius:20px;border:.5px solid rgba(29,185,84,.4);background:rgba(29,185,84,.08);color:rgba(29,185,84,.8);font-size:11px;letter-spacing:.05em;cursor:pointer;pointer-events:all;transition:all .25s;backdrop-filter:blur(6px);}
+.spotify-btn:hover{background:rgba(29,185,84,.18);color:#1DB954;}
+.spotify-btn svg{width:13px;height:13px;fill:currentColor;flex-shrink:0;}
+.player{position:fixed;bottom:0;left:0;right:0;padding:0 28px 26px;background:linear-gradient(transparent,rgba(0,0,0,.93) 40%);pointer-events:all;}
+.progress-row{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
+.ptime{font-size:11px;color:rgba(255,255,255,.3);min-width:34px;}
+.ptime:last-child{text-align:right;}
+.pbar{flex:1;height:3px;background:rgba(255,255,255,.1);border-radius:2px;cursor:pointer;}
+.pfill{height:100%;border-radius:2px;width:0%;transition:background 2.5s ease;}
+.controls-row{display:flex;align-items:center;justify-content:space-between;}
+.meta{display:flex;align-items:center;gap:14px;flex:1;min-width:0;}
+.art{width:52px;height:52px;border-radius:7px;flex-shrink:0;transition:background 2.5s ease;box-shadow:0 4px 24px rgba(0,0,0,.7);background-size:cover;background-position:center;}
+.metainfo{min-width:0;flex:1;}
+.tname{font-family:'Playfair Display',serif;font-size:16px;color:#fff;font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.tartist{font-size:11px;color:rgba(255,255,255,.4);letter-spacing:.08em;text-transform:uppercase;margin-top:3px;}
+.btns{display:flex;align-items:center;gap:8px;}
+.btn{width:38px;height:38px;border-radius:50%;border:none;background:rgba(255,255,255,.07);color:rgba(255,255,255,.6);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;}
+.btn:hover{background:rgba(255,255,255,.15);color:#fff;transform:scale(1.06);}
+.btn.play{width:46px;height:46px;background:rgba(255,255,255,.14);}
+.btn svg{width:18px;height:18px;fill:currentColor;pointer-events:none;}
+.btn.play svg{width:22px;height:22px;}
+.toast{position:fixed;bottom:130px;left:50%;transform:translateX(-50%);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.5);background:rgba(0,0,0,.5);padding:6px 16px;border-radius:20px;border:.5px solid rgba(255,255,255,.1);backdrop-filter:blur(8px);pointer-events:none;opacity:0;transition:opacity .4s;white-space:nowrap;}
+.toast.show{opacity:1;}
+#sp-overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;z-index:200;backdrop-filter:blur(8px);}
+#sp-overlay.show{display:flex;}
+.sp-card{background:#111;border:.5px solid rgba(255,255,255,.1);border-radius:16px;padding:36px;max-width:380px;width:90%;text-align:center;}
+.sp-card h2{font-family:'Playfair Display',serif;font-style:italic;font-size:24px;color:#fff;margin-bottom:8px;}
+.sp-card p{font-size:13px;color:rgba(255,255,255,.45);line-height:1.6;margin-bottom:28px;}
+.sp-go{display:inline-flex;align-items:center;gap:10px;background:#1DB954;color:#000;font-size:13px;font-weight:500;padding:13px 28px;border-radius:30px;border:none;cursor:pointer;transition:all .2s;width:100%;justify-content:center;}
+.sp-go:hover{background:#1ed760;}
+.sp-go svg{width:18px;height:18px;fill:currentColor;}
+.sp-dismiss{margin-top:14px;font-size:11px;color:rgba(255,255,255,.25);cursor:pointer;}
+.sp-dismiss:hover{color:rgba(255,255,255,.5);}
+.sp-status{margin-top:16px;font-size:12px;color:rgba(255,255,255,.35);min-height:18px;}
+#loading{position:fixed;inset:0;background:#000;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;transition:opacity .8s;z-index:300;}
+.l-name{font-family:'Playfair Display',serif;font-style:italic;font-size:32px;color:rgba(255,255,255,.85);}
+.l-sub{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.25);}
+</style>
+</head>
+<body>
+<div id="loading"><div class="l-name">aura</div><div class="l-sub">warming up the room...</div></div>
+<canvas id="c"></canvas>
+<div id="ui">
+  <div class="app-name">aura</div>
+  <div class="mood-tag" id="mood">— —</div>
+  <button class="spotify-btn" id="sp-btn">
+    <svg viewBox="0 0 24 24"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>
+    <span id="sp-btn-text">Connect Spotify</span>
+  </button>
+  <div class="pills" id="pills"></div>
+  <div class="hint" id="hint">click objects in the room to interact</div>
+  <div class="right-panel">
+    <div class="panel-label">View</div>
+    <button class="icon-btn active" id="cam0">⬡</button>
+    <button class="icon-btn" id="cam1">▣</button>
+    <button class="icon-btn" id="cam2">◧</button>
+    <button class="icon-btn" id="cam3">◎</button>
+    <div class="panel-divider"></div>
+    <div class="panel-label">Time</div>
+    <button class="icon-btn" id="tod0">☀</button>
+    <button class="icon-btn tod-active active" id="tod1">🌆</button>
+    <button class="icon-btn" id="tod2">🌙</button>
+  </div>
+  <div class="now-badge"><div class="pulse-dot"></div><span id="now-label">Demo Mode</span></div>
+  <div class="player">
+    <div class="progress-row">
+      <span class="ptime" id="tc">0:00</span>
+      <div class="pbar" id="pbar"><div class="pfill" id="pfill"></div></div>
+      <span class="ptime" id="tt">0:00</span>
+    </div>
+    <div class="controls-row">
+      <div class="meta">
+        <div class="art" id="art"></div>
+        <div class="metainfo">
+          <div class="tname" id="tname">—</div>
+          <div class="tartist" id="tartist">—</div>
+        </div>
+      </div>
+      <div class="btns">
+        <button class="btn" id="bprev"><svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg></button>
+        <button class="btn play" id="bplay"><svg viewBox="0 0 24 24" id="picon"><path d="M8 5v14l11-7z"/></svg></button>
+        <button class="btn" id="bnext"><svg viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6h2v12h-2z"/></svg></button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<div id="sp-overlay">
+  <div class="sp-card">
+    <h2>Connect to Spotify</h2>
+    <p>Link your Spotify account so AURA reacts to whatever you're actually playing — album art, mood, energy, all live.</p>
+    <button class="sp-go" id="sp-auth-btn">
+      <svg viewBox="0 0 24 24"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>
+      Connect with Spotify
+    </button>
+    <div class="sp-status" id="sp-status"></div>
+    <div class="sp-dismiss" id="sp-dismiss">Stay in demo mode</div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ─── SPOTIFY ──────────────────────────────────────────────────────────────────
+var SPOTIFY_CLIENT_ID='YOUR_CLIENT_ID_HERE';
+var SPOTIFY_REDIRECT_URI=window.location.origin+window.location.pathname;
+var SPOTIFY_SCOPES='user-read-currently-playing user-read-playback-state user-modify-playback-state';
+var spotifyToken=null,spotifyConnected=false,spotifyPollInterval=null,spotifyCurrentTrackId=null;
+function genRandom(n){var t='',p='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';for(var i=0;i<n;i++)t+=p[Math.floor(Math.random()*p.length)];return t;}
+async function genChallenge(v){var d=new TextEncoder().encode(v),h=await crypto.subtle.digest('SHA-256',d);return btoa(String.fromCharCode(...new Uint8Array(h))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');}
+async function startAuth(){if(SPOTIFY_CLIENT_ID==='YOUR_CLIENT_ID_HERE'){document.getElementById('sp-status').textContent='Add your Client ID first!';return;}var v=genRandom(128),c=await genChallenge(v);localStorage.setItem('sp_v',v);var p=new URLSearchParams({client_id:SPOTIFY_CLIENT_ID,response_type:'code',redirect_uri:SPOTIFY_REDIRECT_URI,scope:SPOTIFY_SCOPES,code_challenge_method:'S256',code_challenge:c});window.location='https://accounts.spotify.com/authorize?'+p;}
+async function exchangeToken(code){var v=localStorage.getItem('sp_v');var b=new URLSearchParams({client_id:SPOTIFY_CLIENT_ID,grant_type:'authorization_code',code:code,redirect_uri:SPOTIFY_REDIRECT_URI,code_verifier:v});var r=await fetch('https://accounts.spotify.com/api/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:b.toString()});var d=await r.json();if(d.access_token){spotifyToken=d.access_token;localStorage.setItem('sp_token',spotifyToken);localStorage.setItem('sp_expiry',Date.now()+d.expires_in*1000);if(d.refresh_token)localStorage.setItem('sp_refresh',d.refresh_token);window.history.replaceState({},'',window.location.pathname);onConnected();}}
+async function refreshToken(){var rf=localStorage.getItem('sp_refresh');if(!rf)return false;var b=new URLSearchParams({client_id:SPOTIFY_CLIENT_ID,grant_type:'refresh_token',refresh_token:rf});var r=await fetch('https://accounts.spotify.com/api/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:b.toString()});var d=await r.json();if(d.access_token){spotifyToken=d.access_token;localStorage.setItem('sp_token',spotifyToken);localStorage.setItem('sp_expiry',Date.now()+d.expires_in*1000);return true;}return false;}
+async function getToken(){if(Date.now()>parseInt(localStorage.getItem('sp_expiry')||0)-60000)if(!await refreshToken())return null;return localStorage.getItem('sp_token');}
+function extractColor(url,cb){var img=new Image();img.crossOrigin='anonymous';img.onload=function(){var cv=document.createElement('canvas');cv.width=cv.height=50;var ctx=cv.getContext('2d');ctx.drawImage(img,0,0,50,50);var d=ctx.getImageData(0,0,50,50).data,r=0,g=0,b=0,n=0;for(var i=0;i<d.length;i+=16){var br=(d[i]+d[i+1]+d[i+2])/3;if(br>20&&br<230){r+=d[i];g+=d[i+1];b+=d[i+2];n++;}}cb(n?{r:Math.round(r/n),g:Math.round(g/n),b:Math.round(b/n)}:null);};img.onerror=function(){cb(null);};img.src=url;}
+async function fetchPlaying(){var tk=await getToken();if(!tk)return;try{var r=await fetch('https://api.spotify.com/v1/me/player/currently-playing',{headers:{'Authorization':'Bearer '+tk}});if(r.status===204||r.status===404)return;if(r.status===401){spotifyConnected=false;return;}var d=await r.json();if(!d||!d.item)return;applySpotifyData(d);}catch(e){}}
+async function fetchFeatures(id){var tk=await getToken();if(!tk)return null;try{var r=await fetch('https://api.spotify.com/v1/audio-features/'+id,{headers:{'Authorization':'Bearer '+tk}});return await r.json();}catch(e){return null;}}
+async function applySpotifyData(data){
+  var t=data.item,id=t.id;
+  if(id===spotifyCurrentTrackId)return;
+  spotifyCurrentTrackId=id;
+  var artist=t.artists.map(function(a){return a.name;}).join(', ');
+  var art=t.album.images[0]?t.album.images[0].url:'';
+  document.getElementById('tname').textContent=t.name;
+  document.getElementById('tartist').textContent=artist.toUpperCase();
+  document.getElementById('tt').textContent=fmt(Math.round(t.duration_ms/1000));
+  document.getElementById('now-label').textContent='Now Playing';
+  if(art){document.getElementById('art').style.backgroundImage='url('+art+')';document.getElementById('art').style.backgroundSize='cover';}
+  progress=data.progress_ms/1000;lastElapsed=null;
+  if(data.is_playing&&!playing)startPlay();else if(!data.is_playing&&playing)stopPlay();
+  var feat=await fetchFeatures(id);
+  var energy=feat?feat.energy:0.5,valence=feat?feat.valence:0.5;
+  document.getElementById('mood').textContent=getMood(energy,valence);
+  if(energy<0.4&&valence<0.45)setWeather('rain');else if(energy>0.7&&valence>0.6)setWeather('clear');else setWeather('cloudy');
+  setCatMood(energy);
+  if(art)extractColor(art,function(col){if(!col)return;applyPalette(col.r,col.g,col.b,energy);});
+}
+function applyPalette(r,g,b,energy){
+  var hex='#'+[r,g,b].map(function(v){return v.toString(16).padStart(2,'0');}).join('');
+  colorState.tv.tgt.setRGB(r/255,g/255,b/255);
+  colorState.ambient.tgt.setRGB(r/255*.15,g/255*.15,b/255*.15);
+  floatState.ambientInt.tgt=0.4+energy*.8;floatState.lampInt.tgt=lampOn?(1.5+energy*2.5):0;floatState.tvInt.tgt=1.5+energy*2;
+  for(var i=0;i<vizBars.length;i++){vizBars[i].mat.color.setRGB(r/255,g/255,b/255);vizBars[i].mat.emissive.setRGB(r/255,g/255,b/255);}
+  document.getElementById('pfill').style.background=hex;
+  document.getElementById('mood').style.color=hex;document.getElementById('mood').style.borderColor=hex+'55';
+}
+function getMood(e,v){if(e>.7&&v>.6)return'euphoric';if(e>.7&&v<.4)return'intense';if(e<.4&&v>.6)return'dreamy';if(e<.4&&v<.4)return'melancholic';if(v>.7)return'warm';if(v<.3)return'brooding';return'chill';}
+function onConnected(){spotifyConnected=true;document.getElementById('sp-btn-text').textContent='Connected';document.getElementById('sp-overlay').classList.remove('show');document.getElementById('pills').style.display='none';fetchPlaying();spotifyPollInterval=setInterval(fetchPlaying,5000);}
+function checkCallback(){var p=new URLSearchParams(window.location.search),code=p.get('code');if(code){exchangeToken(code);return;}var stored=localStorage.getItem('sp_token'),exp=parseInt(localStorage.getItem('sp_expiry')||0);if(stored&&exp>Date.now()){spotifyToken=stored;onConnected();}}
+
+// ─── DEMO TRACKS ──────────────────────────────────────────────────────────────
+var tracks=[
+  {name:"Nights",artist:"Frank Ocean",duration:307,mood:"melancholic",energy:.58,weather:'rain',
+   bg:0x0a0612,ambientCol:0x4422bb,ambientInt:.7,lampCol:0xaa77ff,lampInt:2.2,tvCol:0x9933ff,tvInt:2.0,
+   floorHex:0x150a26,wallHex:0x0f0818,pillow:0x6a2080,vinyl:0x3a0a5a,art:["#1a052e","#7722aa"]},
+  {name:"Good Days",artist:"SZA",duration:254,mood:"dreamy",energy:.42,weather:'cloudy',
+   bg:0x020810,ambientCol:0x224488,ambientInt:.6,lampCol:0x88bbff,lampInt:1.8,tvCol:0x44aaff,tvInt:1.8,
+   floorHex:0x071426,wallHex:0x050c1a,pillow:0x1a3a70,vinyl:0x060f22,art:["#040e1e","#1a5599"]},
+  {name:"Golden Hour",artist:"JVKE",duration:209,mood:"warm",energy:.78,weather:'clear',
+   bg:0x110800,ambientCol:0x774422,ambientInt:.9,lampCol:0xffcc44,lampInt:3.5,tvCol:0xffaa22,tvInt:2.5,
+   floorHex:0x281200,wallHex:0x1a0d00,pillow:0x7a3a08,vinyl:0x3a1400,art:["#301000","#cc6600"]},
+  {name:"Moonlight",artist:"Kali Uchis",duration:193,mood:"chill",energy:.30,weather:'rain',
+   bg:0x020408,ambientCol:0x1a2e55,ambientInt:.5,lampCol:0x7799cc,lampInt:1.5,tvCol:0x5588dd,tvInt:1.6,
+   floorHex:0x060b16,wallHex:0x04080f,pillow:0x1a2248,vinyl:0x050a14,art:["#030910","#102244"]},
+  {name:"Essence",artist:"Wizkid ft. Tems",duration:247,mood:"euphoric",energy:.85,weather:'clear',
+   bg:0x020c04,ambientCol:0x0a4422,ambientInt:1.0,lampCol:0x55ee99,lampInt:2.8,tvCol:0x33cc77,tvInt:2.2,
+   floorHex:0x041a0a,wallHex:0x030e06,pillow:0x0a4422,vinyl:0x031008,art:["#021408","#0a6635"]},
+];
+
+// ─── THREE SETUP ──────────────────────────────────────────────────────────────
+var canvas=document.getElementById('c');
+var renderer=new THREE.WebGLRenderer({canvas:canvas,antialias:true});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.15;
+var scene=new THREE.Scene();
+var camera=new THREE.PerspectiveCamera(42,window.innerWidth/window.innerHeight,0.1,200);
+window.addEventListener('resize',function(){renderer.setSize(window.innerWidth,window.innerHeight);camera.aspect=window.innerWidth/window.innerHeight;camera.updateProjectionMatrix();});
+renderer.setSize(window.innerWidth,window.innerHeight);
+
+var raycaster=new THREE.Raycaster();
+var mouse=new THREE.Vector2();
+var interactables=[];
+
+// ─── CAMERA ANGLES ────────────────────────────────────────────────────────────
+var camPositions=[
+  {pos:new THREE.Vector3(7.5,6.5,7.5),  target:new THREE.Vector3(0,.8,0),      fov:42}, // isometric overview
+  {pos:new THREE.Vector3(0,2.2,7.5),    target:new THREE.Vector3(0,1.4,-1.5),  fov:52}, // front — looking into room toward TV
+  {pos:new THREE.Vector3(7.0,2.2,1.0),  target:new THREE.Vector3(-1,1.2,0),    fov:50}, // side — looking across room
+  {pos:new THREE.Vector3(-1,1.8,5.5),   target:new THREE.Vector3(-.5,1.6,-4),  fov:55}, // TV close-up
+];
+var activeCam=0;
+var camTgt={pos:new THREE.Vector3(7.5,6.5,7.5),tgt:new THREE.Vector3(0,.8,0),fov:42};
+
+// ─── TIME OF DAY ──────────────────────────────────────────────────────────────
+var timeOfDay=1;
+var todSettings=[
+  {sky:0x1a2a4a,windowInt:1.2,ceilInt:.8,moonInt:0.0,label:'day'},
+  {sky:0x0a0612,windowInt:.6,ceilInt:.3,moonInt:.1,label:'dusk'},
+  {sky:0x020408,windowInt:.2,ceilInt:.1,moonInt:.5,label:'night'},
+];
+
+// ─── LIGHTS ───────────────────────────────────────────────────────────────────
+var ambientLight=new THREE.AmbientLight(0x4422bb,.7);scene.add(ambientLight);
+var lampLight=new THREE.PointLight(0xffcc44,2.5,9);lampLight.position.set(-3.2,3.4,2.0);lampLight.castShadow=true;lampLight.shadow.mapSize.set(512,512);scene.add(lampLight);
+var tvLight=new THREE.PointLight(0x9933ff,2.0,7);tvLight.position.set(-.5,1.8,-3.5);scene.add(tvLight);
+var fillLight=new THREE.DirectionalLight(0xffffff,.12);fillLight.position.set(-4,9,6);fillLight.castShadow=true;fillLight.shadow.mapSize.set(1024,1024);fillLight.shadow.camera.left=-10;fillLight.shadow.camera.right=10;fillLight.shadow.camera.top=10;fillLight.shadow.camera.bottom=-10;fillLight.shadow.camera.far=40;scene.add(fillLight);
+var candleLight=new THREE.PointLight(0xff8822,.7,3);candleLight.position.set(.7,1.0,.75);scene.add(candleLight);
+var sideLight=new THREE.PointLight(0xffdd88,.7,3);sideLight.position.set(3.8,1.4,2.5);scene.add(sideLight);
+var ceilLight=new THREE.PointLight(0xffeedd,.3,18);ceilLight.position.set(0,7.88,0);scene.add(ceilLight);
+var moonLight=new THREE.PointLight(0x6688cc,.5,8);moonLight.position.set(-8,4,-2);scene.add(moonLight);
+var windowLight=new THREE.PointLight(0x4466bb,.2,6);windowLight.position.set(-7,3.2,-1);scene.add(windowLight);
+
+// ─── INTERACTION STATE ────────────────────────────────────────────────────────
+var lampOn=true,candleOn=true,sideLampOn=true;
+// tvDisplayMode: 0=glow/art, 1=off — cycled by clicking TV
+// vizMode: 0=bars, 1=spectrogram, 2=off — cycled by clicking console
+var tvDisplayMode=0,vizMode=0;
+var catMoodState='idle';
+
+// ─── COLOR STATE ──────────────────────────────────────────────────────────────
+var colorState={
+  bg:{cur:new THREE.Color(0x0a0612),tgt:new THREE.Color(0x0a0612)},
+  ambient:{cur:new THREE.Color(0x4422bb),tgt:new THREE.Color(0x4422bb)},
+  lamp:{cur:new THREE.Color(0xffcc44),tgt:new THREE.Color(0xffcc44)},
+  tv:{cur:new THREE.Color(0x9933ff),tgt:new THREE.Color(0x9933ff)},
+};
+var floatState={ambientInt:{cur:.7,tgt:.7},lampInt:{cur:2.5,tgt:2.5},tvInt:{cur:2.0,tgt:2.0}};
+function lerpF(a,b,t){return a+(b-a)*t;}
+
+// ─── MESH HELPERS ─────────────────────────────────────────────────────────────
+function mkMesh(geo,mat){var m=new THREE.Mesh(geo,mat);m.castShadow=true;m.receiveShadow=true;return m;}
+function mkBox(w,h,d){return new THREE.BoxGeometry(w,h,d);}
+function mkMat(col,rough,metal,emCol,emInt){
+  return new THREE.MeshStandardMaterial({
+    color:col,roughness:rough!==undefined?rough:.9,metalness:metal!==undefined?metal:0,
+    emissive:emCol!==undefined?emCol:0x000000,emissiveIntensity:emInt!==undefined?emInt:0
+  });
+}
+function place(m,x,y,z,ry){m.position.set(x,y,z);if(ry!==undefined)m.rotation.y=ry;scene.add(m);return m;}
+
+// ─── ROOM SHELL — extended to 18x16 so no holes in any angle ─────────────────
+var floorMesh=place(mkMesh(mkBox(18,.12,16),mkMat(0x150a26,.97)),0,-.06,0);
+var wallBack=place(mkMesh(mkBox(18,10,.15),mkMat(0x0f0818,.94)),0,5,-8);
+var wallLeft=place(mkMesh(mkBox(.15,10,16),mkMat(0x0d0715,.94)),-9,5,0);
+var wallRight=place(mkMesh(mkBox(.15,10,16),mkMat(0x0d0715,.94)),9,5,0);
+var wallFront=place(mkMesh(mkBox(18,10,.15),mkMat(0x0d0715,.94)),0,5,8);
+place(mkMesh(mkBox(18,.1,16),mkMat(0x080510,.99)),0,10,0); // ceiling
+// Skirting
+place(mkMesh(mkBox(18,.14,.07),mkMat(0x1e1618)),0,.07,-7.93);
+place(mkMesh(mkBox(.07,.14,16),mkMat(0x1e1618)),-8.93,.07,0);
+
+// ─── EXTERIOR — sky backdrop outside the window (well past the left wall) ────
+var skyPlane=place(mkMesh(mkBox(6,7,.1),new THREE.MeshStandardMaterial({color:0x010308,roughness:1,emissive:0x010308,emissiveIntensity:1})),-11,4,-1.0);
+
+// ─── RUG ──────────────────────────────────────────────────────────────────────
+place(mkMesh(new THREE.CylinderGeometry(2.3,2.3,.04,6),mkMat(0x2a1812,.98)),.5,.02,2);
+place(mkMesh(new THREE.CylinderGeometry(2.0,2.0,.05,6),mkMat(0x341e16,.98)),.5,.025,2);
+
+// ─── TV UNIT ──────────────────────────────────────────────────────────────────
+var tvConsoleMesh=place(mkMesh(mkBox(3.4,.6,1.0),mkMat(0x1a1208,.85)),-.5,.3,-3.8);
+place(mkMesh(mkBox(.1,.22,.1),mkMat(0x111008)),-2.0,.11,-3.8);
+place(mkMesh(mkBox(.1,.22,.1),mkMat(0x111008)),1.0,.11,-3.8);
+var tvFrame=place(mkMesh(mkBox(3.0,2.0,.1),mkMat(0x0d0d12,.7,.4)),-.5,1.9,-4.06);
+var tvScreenMat=mkMat(0x1a0a2e,.05,0,0x9933ff,.5);
+var tvScreenMesh=place(mkMesh(mkBox(2.75,1.72,.05),tvScreenMat),-.5,1.92,-4.0);
+var tvGlowMat=mkMat(0x9933ff,.1,0,0x9933ff,.25);
+var tvGlowMesh=place(mkMesh(mkBox(3.1,2.1,.01),tvGlowMat),-.5,1.9,-4.1);
+place(mkMesh(mkBox(.2,.35,.1),mkMat(0x181210)),-.5,.78,-3.94);
+place(mkMesh(mkBox(3.3,.02,.02),mkMat(0x0d0d0d,.5,.5)),-.5,.52,-3.32);
+place(mkMesh(new THREE.CylinderGeometry(.06,.1,.28,6),mkMat(0x2a3a50,.7,.2)),-1.7,.74,-3.8);
+
+// TV click = toggle display glow on/off
+interactables.push({meshes:[tvFrame,tvScreenMesh],label:'Toggle TV display',onHit:function(){toggleTVDisplay();}});
+// Console click = cycle viz mode
+interactables.push({meshes:[tvConsoleMesh],label:'Cycle visualizer',onHit:function(){cycleVizMode();}});
+
+// ─── VISUALIZER BARS (standard) ───────────────────────────────────────────────
+var vizBars=[];
+var BAR_COUNT=16;
+for(var bi=0;bi<BAR_COUNT;bi++){
+  var bmat=new THREE.MeshStandardMaterial({color:0x9933ff,roughness:.4,emissive:0x9933ff,emissiveIntensity:.7});
+  var bm=mkMesh(new THREE.BoxGeometry(.1,.12,.08),bmat);
+  bm.position.set(-.5+(bi-BAR_COUNT/2+.5)*.195,.66,-3.36);
+  scene.add(bm);
+  vizBars.push({mesh:bm,mat:bmat,tgt:.12,cur:.12});
+}
+
+// ─── SPECTROGRAM BARS (rainbow, different shape — flatter, more columns) ───────
+var specBars=[];
+var SPEC_COUNT=24;
+var specColors=[0xff4400,0xff6600,0xff8800,0xffaa00,0xffcc00,0xffee00,0xeeff00,0xaaff00,0x66ff00,0x22ff44,0x00ffaa,0x00eeff,0x00aaff,0x0077ff,0x2244ff,0x5522ff,0x8811ff,0xaa22ff,0xcc33ff,0xee44ff,0xff44ee,0xff33bb,0xff2288,0xff1155];
+for(var sbi=0;sbi<SPEC_COUNT;sbi++){
+  var sbmat=new THREE.MeshStandardMaterial({color:specColors[sbi],roughness:.3,emissive:specColors[sbi],emissiveIntensity:.8,transparent:true,opacity:.9});
+  var sbm=mkMesh(new THREE.BoxGeometry(.08,.08,.06),sbmat);
+  sbm.position.set(-.5+(sbi-SPEC_COUNT/2+.5)*.13,.62,-3.36);
+  sbm.visible=false;
+  scene.add(sbm);
+  specBars.push({mesh:sbm,mat:sbmat,tgt:.08,cur:.08});
+}
+
+// ─── COUCH ────────────────────────────────────────────────────────────────────
+place(mkMesh(mkBox(5.0,.48,1.6),mkMat(0x2e2218,.96)),.5,.24,2.5);
+place(mkMesh(mkBox(5.0,.9,.32),mkMat(0x36291d,.96)),.5,.93,3.22);
+place(mkMesh(mkBox(.32,.75,1.6),mkMat(0x261a10,.96)),-2.14,.68,2.5);
+place(mkMesh(mkBox(.32,.75,1.6),mkMat(0x261a10,.96)),3.14,.68,2.5);
+var cushXs=[-1.5,0,1.5];
+for(var ci=0;ci<cushXs.length;ci++) place(mkMesh(mkBox(1.45,.84,.28),mkMat(0x3d2f23,.97)),.5+cushXs[ci],.92,3.23);
+var pillowMesh=place(mkMesh(mkBox(.7,.55,.2),mkMat(0x5a3050,.96)),2.0,.64,3.24);
+pillowMesh.rotation.z=.06;
+place(mkMesh(mkBox(1.6,.09,1.55),mkMat(0x3a2535,.98)),-1.5,.5,2.5);
+
+// ─── COFFEE TABLE ─────────────────────────────────────────────────────────────
+place(mkMesh(mkBox(2.0,.08,1.0),mkMat(0x1e1610,.88)),.5,.56,.8);
+var tlo=[[-0.85,-.4],[-.85,.4],[.85,-.4],[.85,.4]];
+for(var tli=0;tli<tlo.length;tli++) place(mkMesh(mkBox(.07,.56,.07),mkMat(0x1a1208)),.5+tlo[tli][0],.28,.8+tlo[tli][1]);
+place(mkMesh(mkBox(.5,.04,.32),mkMat(0x2a2060,.9)),-.3,.61,.8);
+place(mkMesh(mkBox(.06,.02,.18),mkMat(0x1a1a1a,.7,.1)),.5,.61,.9);
+
+// MUG — body + handle ring + base detail
+var mugBody=place(mkMesh(mkBox(.14,.2,.12),mkMat(0x4a3a5a,.85)),.2,.665,.65);
+// Handle: a torus-ish shape using a thin box bent around (approximated with a curved tube)
+var handleCurve=new THREE.QuadraticBezierCurve3(
+  new THREE.Vector3(.27,.72,.65),
+  new THREE.Vector3(.32,.665,.65),
+  new THREE.Vector3(.27,.61,.65)
+);
+var handleGeo=new THREE.TubeGeometry(handleCurve,8,.018,5,false);
+place(mkMesh(handleGeo,mkMat(0x4a3a5a,.85)),0,0,0);
+// Mug rim highlight
+place(mkMesh(mkBox(.15,.015,.13),mkMat(0x5a4a6a,.7)),.2,.77,.65);
+// Mug base
+place(mkMesh(mkBox(.15,.015,.13),mkMat(0x3a2a4a,.9)),.2,.56,.65);
+// register mug as interactable (bonus — hover label)
+interactables.push({meshes:[mugBody],label:'Just a mug of something warm ☕',onHit:function(){showToast('Smells like coffee...');}});
+
+// CANDLE
+var candleBodyMesh=place(mkMesh(mkBox(.09,.2,.09),mkMat(0xd8c89a,.9)),.7,.66,.75);
+var flameMesh=place(mkMesh(new THREE.ConeGeometry(.045,.11,4),mkMat(0xff8800,.2,0,0xff6600,1.4)),.7,.82,.75);
+var flameInner=place(mkMesh(new THREE.ConeGeometry(.025,.07,4),mkMat(0xffee44,.1,0,0xffee44,2.0)),.7,.83,.75);
+interactables.push({meshes:[candleBodyMesh,flameMesh],label:'Snuff candle',onHit:function(){toggleCandle();}});
+
+// ─── FLOOR LAMP ───────────────────────────────────────────────────────────────
+// Floor lamp moved to x=-2.2 so it doesn't clip the window wall at x=-9
+var lampPole=place(mkMesh(mkBox(.07,3.3,.07),mkMat(0x251c10)),-2.2,1.65,1.5);
+var lampShade=place(mkMesh(new THREE.CylinderGeometry(.2,.38,.48,6),mkMat(0x3a2a16,.9)),-2.2,3.4,1.5);
+// Glowing bulb sphere visible inside/under shade
+var lampBulb=place(mkMesh(new THREE.SphereGeometry(.12,8,6),mkMat(0xfff0cc,.2,0,0xffdd77,4.0)),-2.2,3.18,1.5);
+// Glow ring on underside of shade
+var lampGlowDisk=place(mkMesh(new THREE.CylinderGeometry(.3,.3,.02,8),mkMat(0xffcc44,.2,0,0xffcc44,3.0)),-2.2,3.16,1.5);
+place(mkMesh(new THREE.CylinderGeometry(.25,.3,.09,6),mkMat(0x1e1608)),-2.2,.045,1.5);
+// Update lamp light position to match
+lampLight.position.set(-2.2,3.4,1.5);
+interactables.push({meshes:[lampPole,lampShade,lampBulb,lampGlowDisk],label:'Toggle lamp',onHit:function(){toggleLamp();}});
+
+// ─── VINYL PLAYER ─────────────────────────────────────────────────────────────
+var playerBody=place(mkMesh(mkBox(.7,.13,.5),mkMat(0x111111,.65,.15)),1.6,.67,-3.6);
+place(mkMesh(new THREE.CylinderGeometry(.19,.19,.04,12),mkMat(0x0d0d0d,.5,.2)),1.6,.75,-3.6);
+var vinylDisk=place(mkMesh(new THREE.CylinderGeometry(.155,.155,.025,12),mkMat(0x1a1a1a,.8)),1.6,.77,-3.6);
+var vinylLabel=place(mkMesh(new THREE.CylinderGeometry(.065,.065,.03,8),mkMat(0x3a0a5a,.9)),1.6,.785,-3.6);
+place(mkMesh(mkBox(.22,.03,.03),mkMat(0x888888,.4,.5)),1.76,.78,-3.48,-.3);
+interactables.push({meshes:[playerBody,vinylDisk,vinylLabel],label:'Play / Pause',onHit:function(){if(playing)stopPlay();else startPlay();}});
+
+// ─── BOOKSHELF ────────────────────────────────────────────────────────────────
+place(mkMesh(mkBox(.65,3.4,1.05),mkMat(0x1c1209,.9)),-6.3,1.7,-2.0);
+var sYs=[.85,1.75,2.65];
+for(var si=0;si<sYs.length;si++) place(mkMesh(mkBox(.6,.05,1.0),mkMat(0x241a0e)),-6.3,sYs[si],-2.0);
+var bookC=[0x7a1c1c,0x1e3a88,0x2e5228,0x7a4a18,0x3d1e66,0x1e5544,0x663c22,0x1e3060,0x5c1e2a,0x3a4a20,0x774422,0x2a4455];
+for(var bki=0;bki<bookC.length;bki++){
+  var bH=.62+(bki%3)*.1,bRow=Math.floor(bki/5),bCol=bki%5;
+  place(mkMesh(mkBox(.07,bH,.1),mkMat(bookC[bki],.85)),-6.58+bCol*.1,.85+bRow*.9+bH/2,-2.0+(bki%2===0?.02:-.02));
+}
+place(mkMesh(new THREE.CylinderGeometry(.1,.085,.17,5),mkMat(0x4a2e10,.9)),-6.3,3.52,-2.0);
+place(mkMesh(new THREE.SphereGeometry(.2,4,4),mkMat(0x274420,.9)),-6.3,3.78,-2.0);
+
+// ─── WINDOW — proper 4-piece frame flush with left wall ──────────────────────
+var wfx=-8.93;
+place(mkMesh(mkBox(.08,2.6,.12),mkMat(0x2a2218,.85)),wfx,3.2,-2.0);  // left edge
+place(mkMesh(mkBox(.08,2.6,.12),mkMat(0x2a2218,.85)),wfx,3.2, 0.0);  // right edge
+place(mkMesh(mkBox(.08,.12,2.12),mkMat(0x2a2218,.85)),wfx,4.45,-1.0);// top
+place(mkMesh(mkBox(.08,.12,2.12),mkMat(0x2a2218,.85)),wfx,1.95,-1.0);// bottom
+place(mkMesh(mkBox(.06,2.6,.06),mkMat(0x2a2218,.85)),wfx,3.2,-1.0);  // vertical muntin
+place(mkMesh(mkBox(.06,.06,2.12),mkMat(0x2a2218,.85)),wfx,3.2,-1.0); // horizontal muntin
+var glassMat=new THREE.MeshStandardMaterial({color:0x88aacc,roughness:0,metalness:.05,transparent:true,opacity:.1});
+place(mkMesh(mkBox(.04,2.42,1.88),glassMat),wfx+.04,3.2,-1.0);
+
+// ─── PICTURE FRAMES on back wall ──────────────────────────────────────────────
+var framesData=[[4.8,-4.2,0x0e1822],[4.6,-3.0,0x1a0e10],[4.4,-5.5,0x0a150a]];
+for(var fi=0;fi<framesData.length;fi++){
+  place(mkMesh(mkBox(.07,.65,.85),mkMat(0x1a1408,.85)),-8.91,framesData[fi][0],framesData[fi][1]);
+  place(mkMesh(mkBox(.05,.52,.7),mkMat(framesData[fi][2],.5,0,framesData[fi][2],.12)),-8.88,framesData[fi][0],framesData[fi][1]);
+}
+
+// ─── SIDE TABLE + LAMP (clickable) ────────────────────────────────────────────
+place(mkMesh(mkBox(.55,.05,.55),mkMat(0x1c1410,.88)),3.8,.72,2.5);
+var stl=[[-0.2,-.2],[-.2,.2],[.2,-.2],[.2,.2]];
+for(var sti=0;sti<stl.length;sti++) place(mkMesh(mkBox(.05,.72,.05),mkMat(0x1a1208)),3.8+stl[sti][0],.36,2.5+stl[sti][1]);
+place(mkMesh(mkBox(.04,.52,.04),mkMat(0x252010)),3.8,1.0,2.5);
+var sideShade=place(mkMesh(new THREE.CylinderGeometry(.12,.2,.22,5),mkMat(0x3a2a14,.9)),3.8,1.32,2.5);
+// Bright sphere bulb — clearly glowing, no floor pool
+var sideBulb=place(mkMesh(new THREE.SphereGeometry(.07,8,6),mkMat(0xfff0cc,.2,0,0xffdd88,4.0)),3.8,1.2,2.5);
+var sideGlowDisk=place(mkMesh(new THREE.CylinderGeometry(.14,.14,.01,8),mkMat(0xffcc44,.2,0,0xffcc44,2.5)),3.8,1.12,2.5);
+interactables.push({meshes:[sideShade,sideBulb],label:'Toggle side lamp',onHit:function(){toggleSideLamp();}});
+
+// ─── CEILING LIGHT ────────────────────────────────────────────────────────────
+place(mkMesh(new THREE.CylinderGeometry(.18,.22,.1,6),mkMat(0x2a2020,.8)),0,7.94,0);
+
+// ─── CAT BED near TV stand (front-right of console, very visible) ─────────────
+// Bed base — oval cushion on the floor
+var catBedBase=place(mkMesh(new THREE.CylinderGeometry(.55,.55,.08,8),mkMat(0x5a3a2a,.97)),2.2,.04,-2.8);
+// Bed wall — rounded back
+var catBedWall=place(mkMesh(new THREE.CylinderGeometry(.52,.56,.32,8,1,true,Math.PI*.2,Math.PI*1.6),mkMat(0x6a4a36,.95)),2.2,.2,-2.8);
+// Bed inner cushion
+place(mkMesh(new THREE.CylinderGeometry(.42,.42,.05,8),mkMat(0x8a6a58,.95)),2.2,.1,-2.8);
+
+// ─── CAT in bed ───────────────────────────────────────────────────────────────
+var catGroup=new THREE.Group();
+scene.add(catGroup);
+// Body — curled up in bed
+var catBodyMesh=mkMesh(new THREE.SphereGeometry(.22,6,5),mkMat(0x2a2222,.98));
+catBodyMesh.scale.set(1.1,.6,1.3);catBodyMesh.position.set(0,.18,0);
+catGroup.add(catBodyMesh);
+var catHeadMesh=mkMesh(new THREE.SphereGeometry(.14,6,5),mkMat(0x2a2222,.98));
+catHeadMesh.position.set(.2,.22,-.12);
+catGroup.add(catHeadMesh);
+var earZs=[-.055,.055];
+for(var ei=0;ei<earZs.length;ei++){
+  var ear=mkMesh(new THREE.ConeGeometry(.048,.1,3),mkMat(0x2a2222));
+  ear.position.set(.3,.33,earZs[ei]);catGroup.add(ear);
+}
+var eyeMats=[];
+for(var eyi=0;eyi<earZs.length;eyi++){
+  var em=mkMat(0x1a3818,.2,0,0x22ff55,.4);
+  var eye=mkMesh(new THREE.SphereGeometry(.022,6,6),em);
+  eye.position.set(.32,.23,earZs[eyi]);catGroup.add(eye);
+  eyeMats.push(em);
+}
+// Curled tail
+var tailCurve=new THREE.QuadraticBezierCurve3(
+  new THREE.Vector3(-.15,.12,.18),
+  new THREE.Vector3(.1,.22,.38),
+  new THREE.Vector3(.25,.16,.2)
+);
+var tailGeo=new THREE.TubeGeometry(tailCurve,8,.032,4,false);
+catGroup.add(mkMesh(tailGeo,mkMat(0x2a2222,.98)));
+catGroup.position.set(2.2,.08,-2.8);
+
+// ─── WEATHER — rain spawns OUTSIDE only (behind window plane) ────────────────
+var weatherParticles=[];
+var currentWeather='rain';
+var weatherGroup=new THREE.Group();scene.add(weatherGroup);
+
+// Rain spawns in a volume outside the window (x < -8.9, behind the wall)
+function buildRaindrops(){
+  clearWeatherParticles();
+  var rainMat=new THREE.MeshStandardMaterial({color:0x99bbdd,roughness:1,transparent:true,opacity:.5});
+  for(var ri=0;ri<50;ri++){
+    var drop=mkMesh(new THREE.CylinderGeometry(.008,.008,.15,3),rainMat);
+    resetRaindrop(drop,true);
+    weatherGroup.add(drop);
+    weatherParticles.push({mesh:drop,speed:.055+Math.random()*.07,type:'rain'});
+  }
+}
+function resetRaindrop(m,rnd){
+  // x just outside window, z within window width, y from top down
+  m.position.set(
+    -10+Math.random()*.5,
+    rnd?(1+Math.random()*5):5.5,
+    -2.0+Math.random()*2.0
+  );
+  m.rotation.z=.1;
+}
+function buildStars(){
+  clearWeatherParticles();
+  for(var sti=0;sti<28;sti++){
+    var sm=new THREE.MeshStandardMaterial({color:0xffffff,emissive:0xffffff,emissiveIntensity:1});
+    var star=mkMesh(new THREE.SphereGeometry(.018+Math.random()*.012,4,4),sm);
+    // Scatter on the sky plane behind the window
+    star.position.set(-9.5+Math.random()*.3,1.8+Math.random()*3.2,-2.1+Math.random()*2.2);
+    weatherGroup.add(star);
+    weatherParticles.push({mesh:star,phase:Math.random()*Math.PI*2,type:'star'});
+  }
+}
+function buildCloudy(){
+  clearWeatherParticles();
+  var cloudMat=new THREE.MeshStandardMaterial({color:0x445566,roughness:1,transparent:true,opacity:.35});
+  for(var cli=0;cli<6;cli++){
+    var cl=mkMesh(new THREE.SphereGeometry(.18+Math.random()*.1,5,4),cloudMat);
+    cl.scale.set(1.4+Math.random(),.5,1);
+    cl.position.set(-9.5,3.2+Math.random()*.6,-1+Math.random()*1.6-0.8);
+    weatherGroup.add(cl);
+    weatherParticles.push({mesh:cl,phase:Math.random()*Math.PI*2,type:'cloud'});
+  }
+}
+function clearWeatherParticles(){for(var i=0;i<weatherParticles.length;i++)weatherGroup.remove(weatherParticles[i].mesh);weatherParticles=[];}
+function setWeather(w){currentWeather=w;if(w==='rain')buildRaindrops();else if(w==='clear')buildStars();else buildCloudy();}
+
+// ─── STEAM PARTICLES from mug ─────────────────────────────────────────────────
+var steamParticles=[];
+for(var spi=0;spi<8;spi++){
+  var sp=mkMesh(new THREE.SphereGeometry(.018,4,4),new THREE.MeshStandardMaterial({color:0xffffff,roughness:.5,transparent:true,opacity:.2,emissive:0xffffff,emissiveIntensity:.2}));
+  sp.position.set(.2+(Math.random()-.5)*.05,.78+spi*.08,.65);
+  sp.userData={phase:Math.random()*Math.PI*2,idx:spi};
+  scene.add(sp);steamParticles.push(sp);
+}
+
+// ─── INTERACTION FUNCTIONS ────────────────────────────────────────────────────
+var toastTimer=null;
+function showToast(msg){var t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(function(){t.classList.remove('show');},1800);}
+function toggleLamp(){
+  lampOn=!lampOn;
+  floatState.lampInt.tgt=lampOn?tracks[curTrack].lampInt:0;
+  lampGlowDisk.material.emissiveIntensity=lampOn?3.0:0;
+  lampBulb.material.emissiveIntensity=lampOn?4.0:0;
+  showToast(lampOn?'Lamp on':'Lamp off');
+}
+function toggleCandle(){candleOn=!candleOn;flameMesh.visible=candleOn;flameInner.visible=candleOn;showToast(candleOn?'Candle lit':'Candle snuffed');}
+function toggleSideLamp(){
+  sideLampOn=!sideLampOn;
+  sideLight.intensity=sideLampOn?.7:0;
+  sideBulb.material.emissiveIntensity=sideLampOn?4.0:0;
+  sideGlowDisk.material.emissiveIntensity=sideLampOn?2.5:0;
+  showToast(sideLampOn?'Side lamp on':'Side lamp off');
+}
+
+function toggleTVDisplay(){
+  tvDisplayMode=(tvDisplayMode+1)%2;
+  var on=tvDisplayMode===0;
+  tvScreenMat.emissiveIntensity=on?.5:0;
+  tvGlowMat.emissiveIntensity=on?.25:0;
+  floatState.tvInt.tgt=on?tracks[curTrack].tvInt:0;
+  showToast(on?'TV on':'TV off');
+}
+
+function cycleVizMode(){
+  vizMode=(vizMode+1)%3;
+  var labels=['Bars','Spectrogram','Off'];
+  for(var i=0;i<vizBars.length;i++) vizBars[i].mesh.visible=(vizMode===0);
+  for(var i=0;i<specBars.length;i++) specBars[i].mesh.visible=(vizMode===1);
+  showToast('Visualizer: '+labels[vizMode]);
+}
+
+function setCatMood(energy){
+  if(energy<0.4){
+    catMoodState='sleep';
+    catBodyMesh.scale.set(1.1,.5,1.4);
+    catHeadMesh.position.set(.18,.16,-.12);
+    for(var i=0;i<eyeMats.length;i++){eyeMats[i].emissive.setHex(0x112211);eyeMats[i].emissiveIntensity=.05;}
+    showToast('The cat is sleeping...');
+  } else if(energy>0.7){
+    catMoodState='alert';
+    catBodyMesh.scale.set(1.1,.72,1.2);
+    catHeadMesh.position.set(.24,.26,-.1);
+    for(var i=0;i<eyeMats.length;i++){eyeMats[i].emissive.setHex(0x33ff77);eyeMats[i].emissiveIntensity=.8;}
+    showToast('Cat is vibing!');
+  } else {
+    catMoodState='idle';
+    catBodyMesh.scale.set(1.1,.6,1.3);
+    catHeadMesh.position.set(.2,.22,-.12);
+    for(var i=0;i<eyeMats.length;i++){eyeMats[i].emissive.setHex(0x22ff55);eyeMats[i].emissiveIntensity=.4;}
+  }
+}
+
+function applyTimeOfDay(idx){
+  timeOfDay=idx;
+  var s=todSettings[idx];
+  colorState.bg.tgt.setHex(s.sky);
+  windowLight.intensity=s.windowInt;moonLight.intensity=s.moonInt;ceilLight.intensity=s.ceilInt;
+  // Update sky plane colour to match time
+  if(idx===0) skyPlane.material.color.setHex(0x0d1a33);
+  else if(idx===1) skyPlane.material.color.setHex(0x1a0808);
+  else skyPlane.material.color.setHex(0x010308);
+  skyPlane.material.emissive.setHex(skyPlane.material.color.getHex());
+  for(var j=0;j<3;j++){document.getElementById('tod'+j).classList.toggle('tod-active',j===idx);document.getElementById('tod'+j).classList.toggle('active',j===idx);}
+  showToast(s.label.charAt(0).toUpperCase()+s.label.slice(1));
+}
+
+// ─── DEMO TRACK APPLY ─────────────────────────────────────────────────────────
+function applyDemoTrack(t){
+  colorState.ambient.tgt.setHex(t.ambientCol);colorState.lamp.tgt.setHex(t.lampCol);colorState.tv.tgt.setHex(t.tvCol);
+  floatState.ambientInt.tgt=t.ambientInt;floatState.lampInt.tgt=lampOn?t.lampInt:0;floatState.tvInt.tgt=tvDisplayMode===0?t.tvInt:0;
+  floorMesh.material.color.setHex(t.floorHex);wallBack.material.color.setHex(t.wallHex);wallLeft.material.color.setHex(t.wallHex);wallRight.material.color.setHex(t.wallHex);
+  tvScreenMat.emissive.setHex(t.tvCol);tvScreenMat.color.setHex(t.tvCol);
+  tvGlowMat.emissive.setHex(t.tvCol);tvGlowMat.color.setHex(t.tvCol);
+  vinylLabel.material.color.setHex(t.vinyl);pillowMesh.material.color.setHex(t.pillow);
+  for(var i=0;i<vizBars.length;i++){vizBars[i].mat.color.setHex(t.tvCol);vizBars[i].mat.emissive.setHex(t.tvCol);}
+  var hex='#'+t.tvCol.toString(16).padStart(6,'0');
+  document.getElementById('tname').textContent=t.name;
+  document.getElementById('tartist').textContent=t.artist.toUpperCase();
+  document.getElementById('tt').textContent=fmt(t.duration);
+  document.getElementById('mood').textContent=t.mood;
+  document.getElementById('mood').style.color=hex;document.getElementById('mood').style.borderColor=hex+'55';
+  document.getElementById('pfill').style.background=hex;
+  document.getElementById('art').style.background='linear-gradient(135deg,'+t.art[0]+','+t.art[1]+')';
+  document.getElementById('art').style.backgroundImage='none';
+  document.querySelectorAll('.pill').forEach(function(p,i){p.classList.toggle('active',i===curTrack);});
+  setWeather(t.weather);setCatMood(t.energy);
+}
+
+// ─── PLAYBACK ─────────────────────────────────────────────────────────────────
+var playing=false,curTrack=0,progress=0,lastElapsed=null,barTimer=null;
+var vinylAngle=0,flameT=0,camDriftT=0,steamT=0,catBobT=0;
+
+function loadDemoTrack(idx,autoplay){curTrack=idx;progress=0;lastElapsed=null;document.getElementById('pfill').style.width='0%';document.getElementById('tc').textContent='0:00';applyDemoTrack(tracks[idx]);if(autoplay&&!playing)startPlay();}
+function startPlay(){playing=true;document.getElementById('picon').innerHTML='<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>';lastElapsed=null;scheduleBars();}
+function stopPlay(){playing=false;document.getElementById('picon').innerHTML='<path d="M8 5v14l11-7z"/>';clearTimeout(barTimer);}
+function scheduleBars(){
+  if(!playing)return;
+  var energy=spotifyConnected?.6:tracks[curTrack].energy;
+  for(var i=0;i<vizBars.length;i++) vizBars[i].tgt=.06+Math.random()*.7*energy;
+  for(var i=0;i<specBars.length;i++) specBars[i].tgt=.05+Math.random()*.8*energy*(1+Math.sin(i*.4)*.3);
+  barTimer=setTimeout(scheduleBars,75+Math.random()*40);
+}
+function fmt(s){var m=Math.floor(s/60),sec=Math.floor(s%60);return m+':'+(sec<10?'0':'')+sec;}
+
+// ─── RENDER LOOP ──────────────────────────────────────────────────────────────
+var clock=new THREE.Clock();
+function render(){
+  requestAnimationFrame(render);
+  var delta=clock.getDelta(),elapsed=clock.getElapsedTime();
+  var ls=Math.min(delta*1.4,.06);
+
+  for(var k in colorState) colorState[k].cur.lerp(colorState[k].tgt,ls*1.5);
+  for(var fk in floatState) floatState[fk].cur=lerpF(floatState[fk].cur,floatState[fk].tgt,ls*1.5);
+  scene.background=colorState.bg.cur;
+  ambientLight.color.copy(colorState.ambient.cur);ambientLight.intensity=floatState.ambientInt.cur;
+  lampLight.color.copy(colorState.lamp.cur);lampLight.intensity=floatState.lampInt.cur;
+  tvLight.color.copy(colorState.tv.cur);tvLight.intensity=floatState.tvInt.cur;
+  ceilLight.color.copy(colorState.ambient.cur);
+
+  // Standard viz bars
+  if(vizMode===0){
+    for(var bi2=0;bi2<vizBars.length;bi2++){
+      var vb=vizBars[bi2];vb.cur=lerpF(vb.cur,vb.tgt,.22);
+      vb.mesh.scale.y=Math.max(.1,vb.cur/.12);vb.mesh.position.y=.6+vb.cur*.5;
+    }
+  }
+  // Spectrogram bars — grow from bottom, rainbow colours
+  if(vizMode===1){
+    for(var sbi2=0;sbi2<specBars.length;sbi2++){
+      var sb=specBars[sbi2];sb.cur=lerpF(sb.cur,sb.tgt,.2);
+      sb.mesh.scale.y=Math.max(.1,sb.cur/.08);sb.mesh.position.y=.58+sb.cur*.5;
+      sb.mat.emissiveIntensity=.6+sb.cur*1.5;
+    }
+  }
+
+  // Vinyl spin
+  if(playing) vinylAngle+=delta*1.6;
+  vinylDisk.rotation.y=vinylAngle;vinylLabel.rotation.y=vinylAngle;
+
+  // Candle flicker
+  flameT+=delta;
+  if(candleOn){
+    var flick=.8+Math.sin(flameT*13.1)*.35+Math.sin(flameT*7.3)*.2;
+    flameMesh.scale.y=flick;flameMesh.scale.x=.7+Math.sin(flameT*11)*.25;
+    flameInner.scale.y=flick*.8;flameInner.scale.x=.6+Math.sin(flameT*13)*.2;
+    candleLight.intensity=.25+flick*.5;
+  } else {candleLight.intensity=0;}
+
+  // Steam
+  steamT+=delta;
+  var energy=spotifyConnected?.6:tracks[curTrack].energy;
+  var spd=.35+energy*.75;
+  for(var spi2=0;spi2<steamParticles.length;spi2++){
+    var sp2=steamParticles[spi2];
+    sp2.position.y+=delta*spd*(1-sp2.userData.idx*.04);
+    sp2.position.x=.2+Math.sin(steamT*1.4+sp2.userData.phase)*.035;
+    var life=(sp2.position.y-.78)/.65;
+    sp2.material.opacity=Math.max(0,.22*(1-life));
+    if(sp2.position.y>1.48){sp2.position.set(.2+(Math.random()-.5)*.04,.78,.65);sp2.userData.phase=Math.random()*Math.PI*2;}
+  }
+
+  // Cat bob
+  catBobT+=delta;
+  var catBob=catMoodState==='alert'?Math.sin(catBobT*3)*.025:Math.sin(catBobT*.9)*.006;
+  catGroup.position.y=.08+catBob;
+  catGroup.rotation.y=catMoodState==='alert'?Math.sin(catBobT*1.5)*.08:0;
+
+  // Weather
+  for(var wi=0;wi<weatherParticles.length;wi++){
+    var wp=weatherParticles[wi];
+    if(wp.type==='rain'){
+      wp.mesh.position.y-=wp.speed;
+      wp.mesh.position.z+=wp.speed*.15;
+      if(wp.mesh.position.y<.5) resetRaindrop(wp.mesh,false);
+    } else if(wp.type==='star'){
+      wp.phase+=delta;
+      wp.mesh.material.emissiveIntensity=.4+Math.sin(wp.phase*1.8)*.35+(playing?Math.sin(wp.phase*7)*.25:0);
+    } else if(wp.type==='cloud'){
+      wp.phase+=delta*.15;
+      wp.mesh.position.z+=Math.sin(wp.phase)*.001;
+    }
+  }
+
+  // Side lamp subtle flicker (only when on)
+  if(sideLampOn) sideLight.intensity=.55+Math.sin(elapsed*.4)*.1;
+
+  // Progress (demo mode)
+  if(playing&&!spotifyConnected){
+    if(lastElapsed===null)lastElapsed=elapsed;
+    progress=Math.min(progress+(elapsed-lastElapsed),tracks[curTrack].duration);lastElapsed=elapsed;
+    document.getElementById('pfill').style.width=(progress/tracks[curTrack].duration*100)+'%';
+    document.getElementById('tc').textContent=fmt(Math.floor(progress));
+    if(progress>=tracks[curTrack].duration)loadDemoTrack((curTrack+1)%tracks.length,true);
+  } else if(playing){lastElapsed=elapsed;}
+
+  // Camera
+  var cp=camPositions[activeCam];
+  camDriftT+=delta*.055;
+  camTgt.pos.lerp(cp.pos,delta*2.2);camTgt.tgt.lerp(cp.target,delta*2.2);camTgt.fov=lerpF(camTgt.fov,cp.fov,delta*2.2);
+  camera.position.set(camTgt.pos.x+Math.sin(camDriftT)*.15,camTgt.pos.y+Math.sin(camDriftT*1.3)*.08,camTgt.pos.z);
+  camera.lookAt(camTgt.tgt);camera.fov=camTgt.fov;camera.updateProjectionMatrix();
+
+  renderer.render(scene,camera);
+}
+
+// ─── MOUSE INTERACTION ────────────────────────────────────────────────────────
+var hoverTarget=null;
+canvas.addEventListener('mousemove',function(e){
+  mouse.x=(e.clientX/window.innerWidth)*2-1;mouse.y=-(e.clientY/window.innerHeight)*2+1;
+  raycaster.setFromCamera(mouse,camera);
+  var found=false;
+  for(var i=0;i<interactables.length;i++){if(raycaster.intersectObjects(interactables[i].meshes).length>0){found=true;hoverTarget=i;break;}}
+  canvas.classList.toggle('hovering',found);
+  if(!found)hoverTarget=null;
+  var hint=document.getElementById('hint');
+  if(hoverTarget!==null){hint.textContent=interactables[hoverTarget].label;hint.style.opacity='1';}
+  else{hint.style.opacity='.16';hint.textContent='click objects in the room to interact';}
+});
+canvas.addEventListener('click',function(e){
+  mouse.x=(e.clientX/window.innerWidth)*2-1;mouse.y=-(e.clientY/window.innerHeight)*2+1;
+  raycaster.setFromCamera(mouse,camera);
+  for(var i=0;i<interactables.length;i++){if(raycaster.intersectObjects(interactables[i].meshes).length>0){interactables[i].onHit();break;}}
+});
+
+// ─── UI WIRING ────────────────────────────────────────────────────────────────
+var pillsEl=document.getElementById('pills');
+for(var pi=0;pi<tracks.length;pi++){
+  (function(idx){var d=document.createElement('div');d.className='pill'+(idx===0?' active':'');d.textContent=tracks[idx].name;d.onclick=function(){if(!spotifyConnected){stopPlay();loadDemoTrack(idx,true);}};pillsEl.appendChild(d);})(pi);
+}
+for(var ci2=0;ci2<4;ci2++){
+  (function(idx){document.getElementById('cam'+idx).onclick=function(){activeCam=idx;for(var j=0;j<4;j++)document.getElementById('cam'+j).classList.toggle('active',j===idx);};})(ci2);
+}
+for(var ti=0;ti<3;ti++){(function(idx){document.getElementById('tod'+idx).onclick=function(){applyTimeOfDay(idx);};})(ti);}
+
+document.getElementById('bplay').onclick=function(){if(playing)stopPlay();else startPlay();};
+document.getElementById('bnext').onclick=function(){if(!spotifyConnected){stopPlay();loadDemoTrack((curTrack+1)%tracks.length,true);}};
+document.getElementById('bprev').onclick=function(){if(!spotifyConnected){if(progress>3){progress=0;lastElapsed=null;}else{stopPlay();loadDemoTrack((curTrack-1+tracks.length)%tracks.length,true);}}};
+document.getElementById('pbar').onclick=function(e){var r=e.currentTarget.getBoundingClientRect();progress=((e.clientX-r.left)/r.width)*tracks[curTrack].duration;lastElapsed=null;};
+document.getElementById('sp-btn').onclick=function(){document.getElementById('sp-overlay').classList.add('show');};
+document.getElementById('sp-auth-btn').onclick=startAuth;
+document.getElementById('sp-dismiss').onclick=function(){document.getElementById('sp-overlay').classList.remove('show');};
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+applyDemoTrack(tracks[0]);
+applyTimeOfDay(1);
+render();checkCallback();
+setTimeout(function(){var l=document.getElementById('loading');l.style.opacity='0';setTimeout(function(){l.style.display='none';},800);},800);
+</script>
+</body>
+</html>
