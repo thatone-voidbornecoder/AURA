@@ -141,17 +141,28 @@ async function fetchPlaying(){var tk=await getToken();if(!tk)return;try{var r=aw
 async function fetchFeatures(id){var tk=await getToken();if(!tk)return null;try{var r=await fetch('https://api.spotify.com/v1/audio-features/'+id,{headers:{'Authorization':'Bearer '+tk}});return await r.json();}catch(e){return null;}}
 async function applySpotifyData(data){
   var t=data.item,id=t.id;
-  if(id===spotifyCurrentTrackId)return;
+  var isNewTrack=(id!==spotifyCurrentTrackId);
+
+  // Always sync progress and play state regardless of whether track changed
+  progress=data.progress_ms/1000;
+  lastElapsed=null;
+  if(data.is_playing&&!playing)startPlay();
+  else if(!data.is_playing&&playing)stopPlay();
+
+  if(!isNewTrack)return; // room visuals only update on track change
   spotifyCurrentTrackId=id;
+
   var artist=t.artists.map(function(a){return a.name;}).join(', ');
   var art=t.album.images[0]?t.album.images[0].url:'';
   document.getElementById('tname').textContent=t.name;
   document.getElementById('tartist').textContent=artist.toUpperCase();
   document.getElementById('tt').textContent=fmt(Math.round(t.duration_ms/1000));
   document.getElementById('now-label').textContent='Now Playing';
-  if(art){document.getElementById('art').style.backgroundImage='url('+art+')';document.getElementById('art').style.backgroundSize='cover';}
-  progress=data.progress_ms/1000;lastElapsed=null;
-  if(data.is_playing&&!playing)startPlay();else if(!data.is_playing&&playing)stopPlay();
+  if(art){
+    document.getElementById('art').style.backgroundImage='url('+art+')';
+    document.getElementById('art').style.backgroundSize='cover';
+    loadAlbumArtTexture(art);
+  }
   var feat=await fetchFeatures(id);
   var energy=feat?feat.energy:0.5,valence=feat?feat.valence:0.5;
   currentEnergy=energy;
@@ -162,12 +173,59 @@ async function applySpotifyData(data){
 }
 function applyPalette(r,g,b,energy){
   var hex='#'+[r,g,b].map(function(v){return v.toString(16).padStart(2,'0');}).join('');
+  // Derive dark bg/wall tones from album color
+  var bgR=Math.round(r*.08),bgG=Math.round(g*.08),bgB=Math.round(b*.08);
+  var wallR=Math.round(r*.12),wallG=Math.round(g*.12),wallB=Math.round(b*.12);
+  colorState.bg.tgt.setRGB(bgR/255,bgG/255,bgB/255);
   colorState.tv.tgt.setRGB(r/255,g/255,b/255);
-  colorState.ambient.tgt.setRGB(r/255*.15,g/255*.15,b/255*.15);
-  floatState.ambientInt.tgt=0.4+energy*.8;floatState.lampInt.tgt=lampOn?(1.5+energy*2.5):0;floatState.tvInt.tgt=1.5+energy*2;
+  colorState.ambient.tgt.setRGB(r/255*.18,g/255*.18,b/255*.18);
+  colorState.lamp.tgt.setRGB(1.0, 0.85+g/1800, 0.55+b/1200); // keep lamp warm regardless
+  floatState.ambientInt.tgt=0.4+energy*.9;
+  floatState.lampInt.tgt=lampOn?(1.5+energy*2.5):0;
+  floatState.tvInt.tgt=1.5+energy*2;
+  floorMesh.material.color.setRGB(bgR/255*.9,bgG/255*.9,bgB/255*.9);
+  wallBack.material.color.setRGB(wallR/255,wallG/255,wallB/255);
+  wallLeft.material.color.setRGB(wallR/255,wallG/255,wallB/255);
+  wallRight.material.color.setRGB(wallR/255,wallG/255,wallB/255);
+  // Sync glow backlight colour to album palette
+  tvGlowMat.emissive.setRGB(r/255*.5,g/255*.5,b/255*.5);
+  tvGlowMat.color.setRGB(r/255*.3,g/255*.3,b/255*.3);
+  // Only update screen emissive colour if no texture is loaded yet
+  if(!tvScreenMat.map){
+    tvScreenMat.color.setRGB(r/255*.4,g/255*.4,b/255*.4);
+    tvScreenMat.emissive.setRGB(r/255*.5,g/255*.5,b/255*.5);
+  } else {
+    // Texture is loaded — just tint the emissive slightly with album colour
+    tvScreenMat.emissive.setRGB(r/255*.15,g/255*.15,b/255*.15);
+    tvScreenMat.emissiveIntensity=0.55;
+  }
   for(var i=0;i<vizBars.length;i++){vizBars[i].mat.color.setRGB(r/255,g/255,b/255);vizBars[i].mat.emissive.setRGB(r/255,g/255,b/255);}
   document.getElementById('pfill').style.background=hex;
-  document.getElementById('mood').style.color=hex;document.getElementById('mood').style.borderColor=hex+'55';
+  document.getElementById('mood').style.color=hex;
+  document.getElementById('mood').style.borderColor=hex+'55';
+}
+function loadAlbumArtTexture(url){
+  if(!url||url===currentAlbumArtUrl)return;
+  currentAlbumArtUrl=url;
+  // Use an Image with crossOrigin first to ensure it's loaded correctly,
+  // then hand off to TextureLoader via the same URL
+  tvTexLoader.crossOrigin='anonymous';
+  tvTexLoader.load(url,
+    function(tex){
+      // Flip so art is right-way up on the screen face
+      tex.flipY=false;
+      tex.encoding=THREE.sRGBEncoding;
+      // Remove old texture to free memory
+      if(tvScreenMat.map) tvScreenMat.map.dispose();
+      tvScreenMat.map=tex;
+      tvScreenMat.color.setHex(0xffffff); // let texture show at full colour
+      tvScreenMat.emissiveMap=tex;
+      tvScreenMat.emissiveIntensity=0.55; // screen glows the art
+      tvScreenMat.needsUpdate=true;
+    },
+    undefined,
+    function(){ /* fallback — keep colour wash if texture fails */ }
+  );
 }
 function getMood(e,v){if(e>.7&&v>.6)return'euphoric';if(e>.7&&v<.4)return'intense';if(e<.4&&v>.6)return'dreamy';if(e<.4&&v<.4)return'melancholic';if(v>.7)return'warm';if(v<.3)return'brooding';return'chill';}
 function onConnected(){spotifyConnected=true;document.getElementById('sp-btn-text').textContent='Connected';document.getElementById('sp-overlay').classList.remove('show');document.getElementById('now-label').textContent='Now Playing';fetchPlaying();spotifyPollInterval=setInterval(fetchPlaying,5000);}
@@ -281,11 +339,19 @@ var tvConsoleMesh=place(mkMesh(mkBox(3.4,.6,1.0),mkMat(0x1a1208,.85)),-.5,.3,-3.
 place(mkMesh(mkBox(.1,.22,.1),mkMat(0x111008)),-2.0,.11,-3.8);
 place(mkMesh(mkBox(.1,.22,.1),mkMat(0x111008)),1.0,.11,-3.8);
 var tvFrame=place(mkMesh(mkBox(3.0,2.0,.1),mkMat(0x0d0d12,.7,.4)),-.5,1.9,-4.06);
-var tvScreenMat=mkMat(0x1a0a2e,.05,0,0x9933ff,.5);
+// TV screen — roughness 0 so texture looks crisp, emissive so it glows even in dark
+var tvScreenMat=new THREE.MeshStandardMaterial({
+  color:0x111111, roughness:0.05, metalness:0,
+  emissive:0x9933ff, emissiveIntensity:0.4
+});
 var tvScreenMesh=place(mkMesh(mkBox(2.75,1.72,.05),tvScreenMat),-.5,1.92,-4.0);
 var tvGlowMat=mkMat(0x9933ff,.1,0,0x9933ff,.25);
 var tvGlowMesh=place(mkMesh(mkBox(3.1,2.1,.01),tvGlowMat),-.5,1.9,-4.1);
 place(mkMesh(mkBox(.2,.35,.1),mkMat(0x181210)),-.5,.78,-3.94);
+
+// Texture loader for album art
+var tvTexLoader=new THREE.TextureLoader();
+var currentAlbumArtUrl='';
 place(mkMesh(mkBox(3.3,.02,.02),mkMat(0x0d0d0d,.5,.5)),-.5,.52,-3.32);
 place(mkMesh(new THREE.CylinderGeometry(.06,.1,.28,6),mkMat(0x2a3a50,.7,.2)),-1.7,.74,-3.8);
 
@@ -545,9 +611,11 @@ function toggleSideLamp(){
 function toggleTVDisplay(){
   tvDisplayMode=(tvDisplayMode+1)%2;
   var on=tvDisplayMode===0;
-  tvScreenMat.emissiveIntensity=on?.5:0;
-  tvGlowMat.emissiveIntensity=on?.25:0;
-  floatState.tvInt.tgt=on?tracks[curTrack].tvInt:0;
+  tvScreenMat.emissiveIntensity=on?(tvScreenMat.map?0.55:0.4):0;
+  if(!on){tvScreenMat.color.setHex(0x000000);}
+  else if(tvScreenMat.map){tvScreenMat.color.setHex(0xffffff);}
+  tvGlowMat.emissiveIntensity=on?0.25:0;
+  floatState.tvInt.tgt=on?currentEnergy*2+1.5:0;
   showToast(on?'TV on':'TV off');
 }
 
@@ -597,10 +665,14 @@ function applyTimeOfDay(idx){
 // ─── IDLE STATE APPLY (room palette before Spotify connects) ──────────────────
 function applyIdleState(){
   var t=idleState;
+  colorState.bg.tgt.setHex(t.bg);
   colorState.ambient.tgt.setHex(t.ambientCol);colorState.lamp.tgt.setHex(t.lampCol);colorState.tv.tgt.setHex(t.tvCol);
   floatState.ambientInt.tgt=t.ambientInt;floatState.lampInt.tgt=lampOn?t.lampInt:0;floatState.tvInt.tgt=tvDisplayMode===0?t.tvInt:0;
   floorMesh.material.color.setHex(t.floorHex);wallBack.material.color.setHex(t.wallHex);wallLeft.material.color.setHex(t.wallHex);wallRight.material.color.setHex(t.wallHex);
-  tvScreenMat.emissive.setHex(t.tvCol);tvScreenMat.color.setHex(t.tvCol);
+  // TV screen — idle glow only, no texture yet
+  tvScreenMat.emissive.setHex(t.tvCol);
+  tvScreenMat.emissiveIntensity=0.4;
+  if(!tvScreenMat.map) tvScreenMat.color.setHex(t.tvCol);
   tvGlowMat.emissive.setHex(t.tvCol);tvGlowMat.color.setHex(t.tvCol);
   vinylLabel.material.color.setHex(t.vinyl);pillowMesh.material.color.setHex(t.pillow);
   for(var i=0;i<vizBars.length;i++){vizBars[i].mat.color.setHex(t.tvCol);vizBars[i].mat.emissive.setHex(t.tvCol);}
@@ -710,8 +782,16 @@ function render(){
   // Side lamp subtle flicker (only when on)
   if(sideLampOn) sideLight.intensity=.55+Math.sin(elapsed*.4)*.1;
 
-  // Progress bar — driven by Spotify poll (applySpotifyData sets progress)
-  if(playing&&spotifyConnected){lastElapsed=elapsed;}
+  // Progress — advances locally between Spotify polls (poll every 5s, this fills the gap)
+  if(playing&&spotifyConnected){
+    if(lastElapsed===null)lastElapsed=elapsed;
+    var trackDur=parseInt(document.getElementById('tt').textContent.split(':')[0])*60+parseInt(document.getElementById('tt').textContent.split(':')[1]||0);
+    progress+=elapsed-lastElapsed;lastElapsed=elapsed;
+    if(trackDur>0){
+      document.getElementById('pfill').style.width=Math.min(100,(progress/trackDur)*100)+'%';
+      document.getElementById('tc').textContent=fmt(Math.floor(progress));
+    }
+  } else {lastElapsed=null;}
 
   // Camera
   var cp=camPositions[activeCam];
