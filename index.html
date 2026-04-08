@@ -180,7 +180,7 @@ function applyPalette(r,g,b,energy){
   colorState.tv.tgt.setRGB(r/255,g/255,b/255);
   colorState.ambient.tgt.setRGB(r/255*.18,g/255*.18,b/255*.18);
   colorState.lamp.tgt.setRGB(1.0, 0.85+g/1800, 0.55+b/1200); // keep lamp warm regardless
-  floatState.ambientInt.tgt=0.4+energy*.9;
+  floatState.ambientInt.tgt=0.8+energy*.9;
   floatState.lampInt.tgt=lampOn?(1.5+energy*2.5):0;
   floatState.tvInt.tgt=1.5+energy*2;
   floorMesh.material.color.setRGB(bgR/255*.9,bgG/255*.9,bgB/255*.9);
@@ -235,7 +235,7 @@ function checkCallback(){var p=new URLSearchParams(window.location.search),code=
 // Default room palette — neutral deep purple, cozy dusk feel
 var idleState={
   mood:'waiting...', energy:.5, weather:'cloudy',
-  bg:0x0a0612, ambientCol:0x4422bb, ambientInt:.6,
+  bg:0x0a0612, ambientCol:0x6644cc, ambientInt:1.2,
   lampCol:0xffcc44, lampInt:2.5, tvCol:0x6644aa, tvInt:1.5,
   floorHex:0x130a20, wallHex:0x0d0716,
   pillow:0x5a3050, vinyl:0x3a0a5a
@@ -249,7 +249,7 @@ var canvas=document.getElementById('c');
 var renderer=new THREE.WebGLRenderer({canvas:canvas,antialias:true});
 renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
 renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
-renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.15;
+renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.8;
 var scene=new THREE.Scene();
 var camera=new THREE.PerspectiveCamera(42,window.innerWidth/window.innerHeight,0.1,200);
 window.addEventListener('resize',function(){renderer.setSize(window.innerWidth,window.innerHeight);camera.aspect=window.innerWidth/window.innerHeight;camera.updateProjectionMatrix();});
@@ -278,10 +278,10 @@ var todSettings=[
 ];
 
 // ─── LIGHTS ───────────────────────────────────────────────────────────────────
-var ambientLight=new THREE.AmbientLight(0x4422bb,.7);scene.add(ambientLight);
+var ambientLight=new THREE.AmbientLight(0x4422bb,1.4);scene.add(ambientLight);
 var lampLight=new THREE.PointLight(0xffcc44,2.5,9);lampLight.position.set(-3.2,3.4,2.0);lampLight.castShadow=true;lampLight.shadow.mapSize.set(512,512);scene.add(lampLight);
 var tvLight=new THREE.PointLight(0x9933ff,2.0,7);tvLight.position.set(-.5,1.8,-3.5);scene.add(tvLight);
-var fillLight=new THREE.DirectionalLight(0xffffff,.12);fillLight.position.set(-4,9,6);fillLight.castShadow=true;fillLight.shadow.mapSize.set(1024,1024);fillLight.shadow.camera.left=-10;fillLight.shadow.camera.right=10;fillLight.shadow.camera.top=10;fillLight.shadow.camera.bottom=-10;fillLight.shadow.camera.far=40;scene.add(fillLight);
+var fillLight=new THREE.DirectionalLight(0xffffff,.4);fillLight.position.set(-4,9,6);fillLight.castShadow=true;fillLight.shadow.mapSize.set(1024,1024);fillLight.shadow.camera.left=-10;fillLight.shadow.camera.right=10;fillLight.shadow.camera.top=10;fillLight.shadow.camera.bottom=-10;fillLight.shadow.camera.far=40;scene.add(fillLight);
 var candleLight=new THREE.PointLight(0xff8822,.7,3);candleLight.position.set(.7,1.0,.75);scene.add(candleLight);
 var sideLight=new THREE.PointLight(0xffdd88,.7,3);sideLight.position.set(3.8,1.4,2.5);scene.add(sideLight);
 var ceilLight=new THREE.PointLight(0xffeedd,.3,18);ceilLight.position.set(0,7.88,0);scene.add(ceilLight);
@@ -302,7 +302,7 @@ var colorState={
   lamp:{cur:new THREE.Color(0xffcc44),tgt:new THREE.Color(0xffcc44)},
   tv:{cur:new THREE.Color(0x9933ff),tgt:new THREE.Color(0x9933ff)},
 };
-var floatState={ambientInt:{cur:.7,tgt:.7},lampInt:{cur:2.5,tgt:2.5},tvInt:{cur:2.0,tgt:2.0}};
+var floatState={ambientInt:{cur:1.2,tgt:1.2},lampInt:{cur:2.5,tgt:2.5},tvInt:{cur:1.5,tgt:1.5}};
 function lerpF(a,b,t){return a+(b-a)*t;}
 
 // ─── MESH HELPERS ─────────────────────────────────────────────────────────────
