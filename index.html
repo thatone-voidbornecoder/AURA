@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AURA — Now Playing</title>
+<title>AURA v7 — Now Playing</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;1,400&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
@@ -126,8 +126,8 @@ canvas.hovering{cursor:pointer;}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 // ─── SPOTIFY ──────────────────────────────────────────────────────────────────
-var SPOTIFY_CLIENT_ID='ce3e02972c5c4c8aa7f2d48da5e9c101';
-var SPOTIFY_REDIRECT_URI=window.location.origin+window.location.pathname;
+var SPOTIFY_CLIENT_ID='9c842767f20b4320bfd327bb3e201023';
+var SPOTIFY_REDIRECT_URI='https://aura-rouge-omega.vercel.app';
 var SPOTIFY_SCOPES='user-read-currently-playing user-read-playback-state user-modify-playback-state';
 var spotifyToken=null,spotifyConnected=false,spotifyPollInterval=null,spotifyCurrentTrackId=null;
 function genRandom(n){var t='',p='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';for(var i=0;i<n;i++)t+=p[Math.floor(Math.random()*p.length)];return t;}
