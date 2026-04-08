@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AURA v7 — Now Playing</title>
+<title>AURA</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;1,400&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
@@ -173,33 +173,51 @@ async function applySpotifyData(data){
 }
 function applyPalette(r,g,b,energy){
   var hex='#'+[r,g,b].map(function(v){return v.toString(16).padStart(2,'0');}).join('');
-  // Derive dark bg/wall tones from album color
-  var bgR=Math.round(r*.08),bgG=Math.round(g*.08),bgB=Math.round(b*.08);
-  var wallR=Math.round(r*.12),wallG=Math.round(g*.12),wallB=Math.round(b*.12);
-  colorState.bg.tgt.setRGB(bgR/255,bgG/255,bgB/255);
-  colorState.tv.tgt.setRGB(r/255,g/255,b/255);
-  colorState.ambient.tgt.setRGB(r/255*.18,g/255*.18,b/255*.18);
-  colorState.lamp.tgt.setRGB(1.0, 0.85+g/1800, 0.55+b/1200); // keep lamp warm regardless
-  floatState.ambientInt.tgt=0.8+energy*.9;
-  floatState.lampInt.tgt=lampOn?(1.5+energy*2.5):0;
-  floatState.tvInt.tgt=1.5+energy*2;
-  floorMesh.material.color.setRGB(bgR/255*.9,bgG/255*.9,bgB/255*.9);
-  wallBack.material.color.setRGB(wallR/255,wallG/255,wallB/255);
-  wallLeft.material.color.setRGB(wallR/255,wallG/255,wallB/255);
-  wallRight.material.color.setRGB(wallR/255,wallG/255,wallB/255);
-  // Sync glow backlight colour to album palette
-  tvGlowMat.emissive.setRGB(r/255*.5,g/255*.5,b/255*.5);
-  tvGlowMat.color.setRGB(r/255*.3,g/255*.3,b/255*.3);
-  // Only update screen emissive colour if no texture is loaded yet
+
+  // Background — tinted very dark version of album color, but never pure black
+  // Clamp so even a dark album still shows a visible room
+  var bgR=Math.max(8,  Math.round(r*.18));
+  var bgG=Math.max(5,  Math.round(g*.16));
+  var bgB=Math.max(12, Math.round(b*.22));
+  colorState.bg.tgt.setRGB(bgR/255, bgG/255, bgB/255);
+
+  // Wall/floor — slightly lighter than bg
+  var wallR=Math.max(12, Math.round(r*.22));
+  var wallG=Math.max(8,  Math.round(g*.20));
+  var wallB=Math.max(18, Math.round(b*.28));
+  floorMesh.material.color.setRGB(wallR/255*.85, wallG/255*.85, wallB/255*.85);
+  wallBack.material.color.setRGB(wallR/255, wallG/255, wallB/255);
+  wallLeft.material.color.setRGB(wallR/255, wallG/255, wallB/255);
+  wallRight.material.color.setRGB(wallR/255, wallG/255, wallB/255);
+
+  // Ambient — tinted but kept strong so room never goes dark
+  colorState.ambient.tgt.setRGB(
+    Math.max(0.25, r/255*.55),
+    Math.max(0.18, g/255*.45),
+    Math.max(0.35, b/255*.65)
+  );
+  colorState.tv.tgt.setRGB(r/255, g/255, b/255);
+  colorState.lamp.tgt.setRGB(1.0, 0.88, 0.6); // lamp stays warm white always
+
+  floatState.ambientInt.tgt = Math.max(1.0, 0.8 + energy*.9);
+  floatState.lampInt.tgt = lampOn ? (2.0 + energy*2.0) : 0;
+  floatState.tvInt.tgt = 1.5 + energy*2;
+
+  // TV glow
+  tvGlowMat.emissive.setRGB(r/255*.5, g/255*.5, b/255*.5);
+  tvGlowMat.color.setRGB(r/255*.3, g/255*.3, b/255*.3);
   if(!tvScreenMat.map){
-    tvScreenMat.color.setRGB(r/255*.4,g/255*.4,b/255*.4);
-    tvScreenMat.emissive.setRGB(r/255*.5,g/255*.5,b/255*.5);
+    tvScreenMat.color.setRGB(r/255*.4, g/255*.4, b/255*.4);
+    tvScreenMat.emissive.setRGB(r/255*.5, g/255*.5, b/255*.5);
   } else {
-    // Texture is loaded — just tint the emissive slightly with album colour
-    tvScreenMat.emissive.setRGB(r/255*.15,g/255*.15,b/255*.15);
+    tvScreenMat.emissive.setRGB(r/255*.15, g/255*.15, b/255*.15);
     tvScreenMat.emissiveIntensity=0.55;
   }
-  for(var i=0;i<vizBars.length;i++){vizBars[i].mat.color.setRGB(r/255,g/255,b/255);vizBars[i].mat.emissive.setRGB(r/255,g/255,b/255);}
+
+  for(var i=0;i<vizBars.length;i++){
+    vizBars[i].mat.color.setRGB(r/255, g/255, b/255);
+    vizBars[i].mat.emissive.setRGB(r/255, g/255, b/255);
+  }
   document.getElementById('pfill').style.background=hex;
   document.getElementById('mood').style.color=hex;
   document.getElementById('mood').style.borderColor=hex+'55';
@@ -828,11 +846,50 @@ for(var ci2=0;ci2<4;ci2++){
 }
 for(var ti=0;ti<3;ti++){(function(idx){document.getElementById('tod'+idx).onclick=function(){applyTimeOfDay(idx);};})(ti);}
 
-// Playback buttons only do anything when Spotify is connected
-document.getElementById('bplay').onclick=function(){if(!spotifyConnected)return;if(playing)stopPlay();else startPlay();};
-document.getElementById('bnext').onclick=function(){/* Spotify handles next */};
-document.getElementById('bprev').onclick=function(){/* Spotify handles prev */};
-document.getElementById('pbar').onclick=function(e){/* progress driven by Spotify */};
+// ─── SPOTIFY PLAYBACK CONTROLS ────────────────────────────────────────────────
+async function spotifyControl(endpoint, method){
+  var tk=await getToken(); if(!tk)return;
+  try{
+    await fetch('https://api.spotify.com/v1/me/player/'+endpoint,{
+      method:method||'POST', headers:{'Authorization':'Bearer '+tk,'Content-Type':'application/json'}
+    });
+    // Re-poll after 400ms so UI reflects change
+    setTimeout(function(){
+      spotifyCurrentTrackId=null; // force full refresh on next poll
+      fetchPlaying();
+    },400);
+  }catch(e){}
+}
+
+document.getElementById('bplay').onclick=function(){
+  if(!spotifyConnected)return;
+  spotifyControl(playing?'pause':'play', playing?'PUT':'PUT');
+  if(playing)stopPlay(); else startPlay();
+};
+document.getElementById('bnext').onclick=function(){
+  if(!spotifyConnected)return;
+  spotifyControl('next','POST');
+};
+document.getElementById('bprev').onclick=function(){
+  if(!spotifyConnected)return;
+  spotifyControl('previous','POST');
+};
+document.getElementById('pbar').onclick=function(e){
+  if(!spotifyConnected)return;
+  var r=e.currentTarget.getBoundingClientRect();
+  var pct=(e.clientX-r.left)/r.width;
+  var tt=document.getElementById('tt').textContent.split(':');
+  var dur=(parseInt(tt[0])||0)*60+(parseInt(tt[1])||0);
+  var posMs=Math.round(pct*dur*1000);
+  progress=pct*dur; lastElapsed=null;
+  document.getElementById('pfill').style.width=(pct*100)+'%';
+  getToken().then(function(tk){
+    if(!tk)return;
+    fetch('https://api.spotify.com/v1/me/player/seek?position_ms='+posMs,{
+      method:'PUT',headers:{'Authorization':'Bearer '+tk}
+    });
+  });
+};
 document.getElementById('sp-btn').onclick=function(){document.getElementById('sp-overlay').classList.add('show');};
 document.getElementById('sp-auth-btn').onclick=startAuth;
 document.getElementById('sp-dismiss').onclick=function(){document.getElementById('sp-overlay').classList.remove('show');};
