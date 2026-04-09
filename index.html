@@ -190,8 +190,22 @@ function paletteFromFeatures(energy, valence){
   };
 }
 async function fetchPlaying(){var tk=await getToken();if(!tk)return;try{var r=await fetch('https://api.spotify.com/v1/me/player/currently-playing',{headers:{'Authorization':'Bearer '+tk}});if(r.status===204||r.status===404)return;if(r.status===401){spotifyConnected=false;return;}var d=await r.json();if(!d||!d.item)return;applySpotifyData(d);}catch(e){}}
-async function fetchFeatures(id){var tk=await getToken();if(!tk)return null;try{var r=await fetch('https://api.spotify.com/v1/audio-features/'+id,{headers:{'Authorization':'Bearer '+tk}});return await r.json();}catch(e){return null;}}
-async function applySpotifyData(data){
+// fetchFeatures removed — /v1/audio-features deprecated Nov 2024 for new apps
+
+// Estimate energy + valence from available track data
+// popularity: 0-100 (higher = more popular/mainstream, correlates loosely with energy)
+// duration: shorter tracks tend to be more energetic, longer more chill
+// explicit: slight signal toward edgier/more intense
+function estimateFeatures(track){
+  var pop=track.popularity||50;
+  var dur=track.duration_ms||200000;
+  // Normalise: pop 0-100 → 0-1, dur 90s-600s → 1-0 (shorter=more energetic)
+  var energy=Math.min(1,Math.max(0,(pop/100)*0.6 + (1-Math.min(1,(dur-90000)/510000))*0.4));
+  // Valence heuristic: popularity and shorter duration loosely correlate with upbeat
+  var valence=Math.min(1,Math.max(0,(pop/100)*0.5 + (1-Math.min(1,(dur-90000)/510000))*0.3 + (track.explicit?-0.1:0.1)));
+  return {energy:energy, valence:valence};
+}
+function applySpotifyData(data){
   var t=data.item,id=t.id;
   var isNewTrack=(id!==spotifyCurrentTrackId);
 
@@ -215,8 +229,8 @@ async function applySpotifyData(data){
     document.getElementById('art').style.backgroundSize='cover';
     loadAlbumArtTexture(art);
   }
-  var feat=await fetchFeatures(id);
-  var energy=feat?feat.energy:0.5,valence=feat?feat.valence:0.5;
+  var ef=estimateFeatures(t);
+  var energy=ef.energy, valence=ef.valence;
   currentEnergy=energy;
   document.getElementById('mood').textContent=getMood(energy,valence);
   if(energy<0.4&&valence<0.45)setWeather('rain');else if(energy>0.7&&valence>0.6)setWeather('clear');else setWeather('cloudy');
