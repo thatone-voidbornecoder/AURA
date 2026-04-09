@@ -135,8 +135,60 @@ async function genChallenge(v){var d=new TextEncoder().encode(v),h=await crypto.
 async function startAuth(){if(SPOTIFY_CLIENT_ID==='YOUR_CLIENT_ID_HERE'){document.getElementById('sp-status').textContent='Add your Client ID first!';return;}var v=genRandom(128),c=await genChallenge(v);localStorage.setItem('sp_v',v);var p=new URLSearchParams({client_id:SPOTIFY_CLIENT_ID,response_type:'code',redirect_uri:SPOTIFY_REDIRECT_URI,scope:SPOTIFY_SCOPES,code_challenge_method:'S256',code_challenge:c});window.location='https://accounts.spotify.com/authorize?'+p;}
 async function exchangeToken(code){var v=localStorage.getItem('sp_v');var b=new URLSearchParams({client_id:SPOTIFY_CLIENT_ID,grant_type:'authorization_code',code:code,redirect_uri:SPOTIFY_REDIRECT_URI,code_verifier:v});var r=await fetch('https://accounts.spotify.com/api/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:b.toString()});var d=await r.json();if(d.access_token){spotifyToken=d.access_token;localStorage.setItem('sp_token',spotifyToken);localStorage.setItem('sp_expiry',Date.now()+d.expires_in*1000);if(d.refresh_token)localStorage.setItem('sp_refresh',d.refresh_token);window.history.replaceState({},'',window.location.pathname);onConnected();}}
 async function refreshToken(){var rf=localStorage.getItem('sp_refresh');if(!rf)return false;var b=new URLSearchParams({client_id:SPOTIFY_CLIENT_ID,grant_type:'refresh_token',refresh_token:rf});var r=await fetch('https://accounts.spotify.com/api/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:b.toString()});var d=await r.json();if(d.access_token){spotifyToken=d.access_token;localStorage.setItem('sp_token',spotifyToken);localStorage.setItem('sp_expiry',Date.now()+d.expires_in*1000);return true;}return false;}
-async function getToken(){if(Date.now()>parseInt(localStorage.getItem('sp_expiry')||0)-60000)if(!await refreshToken())return null;return localStorage.getItem('sp_token');}
-function extractColor(url,cb){var img=new Image();img.crossOrigin='anonymous';img.onload=function(){var cv=document.createElement('canvas');cv.width=cv.height=50;var ctx=cv.getContext('2d');ctx.drawImage(img,0,0,50,50);var d=ctx.getImageData(0,0,50,50).data,r=0,g=0,b=0,n=0;for(var i=0;i<d.length;i+=16){var br=(d[i]+d[i+1]+d[i+2])/3;if(br>20&&br<230){r+=d[i];g+=d[i+1];b+=d[i+2];n++;}}cb(n?{r:Math.round(r/n),g:Math.round(g/n),b:Math.round(b/n)}:null);};img.onerror=function(){cb(null);};img.src=url;}
+async function getToken(){
+  var stored=localStorage.getItem('sp_token');
+  var expiry=parseInt(localStorage.getItem('sp_expiry')||0);
+  // Only refresh if within 5 minutes of expiry
+  if(stored && Date.now() < expiry-300000) return stored;
+  // Try to refresh
+  var ok=await refreshToken();
+  if(ok) return localStorage.getItem('sp_token');
+  // Refresh failed — but if we still have a token that hasn't actually expired, use it
+  if(stored && Date.now() < expiry) return stored;
+  return null;
+}
+// Derive a room palette from audio features (energy + valence)
+// This avoids the CORS canvas taint issue with Spotify's image CDN
+function paletteFromFeatures(energy, valence){
+  // energy: 0-1 (intensity), valence: 0-1 (happiness)
+  // Map to HSL then convert to RGB
+  // Low energy + low valence = cool dark blue/purple
+  // High energy + high valence = warm bright orange/gold
+  // Low energy + high valence = soft dreamy teal/green
+  // High energy + low valence = intense deep red/crimson
+  var hue, sat, light;
+  if(valence > 0.6 && energy > 0.6){       // euphoric — warm gold
+    hue=38; sat=90; light=55;
+  } else if(valence > 0.6 && energy <= 0.6){ // dreamy — soft teal
+    hue=185; sat=60; light=48;
+  } else if(valence <= 0.4 && energy > 0.6){ // intense — deep red
+    hue=355; sat=75; light=42;
+  } else if(valence <= 0.4 && energy <= 0.4){ // melancholic — cool blue
+    hue=230; sat=55; light=38;
+  } else {                                    // neutral — purple
+    hue=265; sat=50; light=45;
+  }
+  // Blend hue toward the valence/energy midpoint for smooth transitions
+  hue = hue + (energy-0.5)*30 + (valence-0.5)*20;
+  // Convert HSL to RGB
+  sat/=100; light/=100;
+  var c=(1-Math.abs(2*light-1))*sat;
+  var x=c*(1-Math.abs((hue/60)%2-1));
+  var m=light-c/2;
+  var rr,gg,bb;
+  var h=hue%360;
+  if(h<60){rr=c;gg=x;bb=0;}
+  else if(h<120){rr=x;gg=c;bb=0;}
+  else if(h<180){rr=0;gg=c;bb=x;}
+  else if(h<240){rr=0;gg=x;bb=c;}
+  else if(h<300){rr=x;gg=0;bb=c;}
+  else{rr=c;gg=0;bb=x;}
+  return {
+    r: Math.round((rr+m)*255),
+    g: Math.round((gg+m)*255),
+    b: Math.round((bb+m)*255)
+  };
+}
 async function fetchPlaying(){var tk=await getToken();if(!tk)return;try{var r=await fetch('https://api.spotify.com/v1/me/player/currently-playing',{headers:{'Authorization':'Bearer '+tk}});if(r.status===204||r.status===404)return;if(r.status===401){spotifyConnected=false;return;}var d=await r.json();if(!d||!d.item)return;applySpotifyData(d);}catch(e){}}
 async function fetchFeatures(id){var tk=await getToken();if(!tk)return null;try{var r=await fetch('https://api.spotify.com/v1/audio-features/'+id,{headers:{'Authorization':'Bearer '+tk}});return await r.json();}catch(e){return null;}}
 async function applySpotifyData(data){
@@ -169,7 +221,9 @@ async function applySpotifyData(data){
   document.getElementById('mood').textContent=getMood(energy,valence);
   if(energy<0.4&&valence<0.45)setWeather('rain');else if(energy>0.7&&valence>0.6)setWeather('clear');else setWeather('cloudy');
   setCatMood(energy);
-  if(art)extractColor(art,function(col){if(!col)return;applyPalette(col.r,col.g,col.b,energy);});
+  // Derive palette from audio features — reliable, no CORS issues
+  var col=paletteFromFeatures(energy,valence);
+  applyPalette(col.r,col.g,col.b,energy);
 }
 function applyPalette(r,g,b,energy){
   var hex='#'+[r,g,b].map(function(v){return v.toString(16).padStart(2,'0');}).join('');
